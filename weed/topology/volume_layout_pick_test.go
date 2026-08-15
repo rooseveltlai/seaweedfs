@@ -136,6 +136,107 @@ func TestPickForWriteWeightedDistribution(t *testing.T) {
 	}
 }
 
+func TestPickForWritePrioritizesFullestNearFullVolume(t *testing.T) {
+	layout := `
+{
+  "dc1":{
+    "rack1":{
+      "server1":{
+        "volumes":[
+          {"id":1, "size":9500, "replication":"000"},
+          {"id":2, "size":9800, "replication":"000"},
+          {"id":3, "size":9499, "replication":"000"}
+        ],
+        "limit":10
+      }
+    }
+  }
+}
+`
+	_, vl := setupPickTest(t, layout, 10000)
+	if vid, _ := vl.pickByFillPolicy([]needle.VolumeId{1, 3}); vid != 1 {
+		t.Fatalf("expected volume at exact 95%% threshold to be preferred, got %d", vid)
+	}
+
+	for i := 0; i < 100; i++ {
+		vid, _, _, _, err := vl.PickForWrite(1, &VolumeGrowOption{})
+		if err != nil {
+			t.Fatalf("PickForWrite: %v", err)
+		}
+		if vid != 2 {
+			t.Fatalf("expected fullest near-full volume 2, got %d", vid)
+		}
+	}
+}
+
+func TestPickForWriteNearFullPreferenceUsesPendingSize(t *testing.T) {
+	layout := `
+{
+  "dc1":{
+    "rack1":{
+      "server1":{
+        "volumes":[
+          {"id":1, "size":9400, "replication":"000"},
+          {"id":2, "size":1000, "replication":"000"}
+        ],
+        "limit":10
+      }
+    }
+  }
+}
+`
+	_, vl := setupPickTest(t, layout, 10000)
+	vl.RecordAssign(1, 100)
+
+	for i := 0; i < 100; i++ {
+		vid, _, _, _, err := vl.PickForWrite(1, &VolumeGrowOption{})
+		if err != nil {
+			t.Fatalf("PickForWrite: %v", err)
+		}
+		if vid != 1 {
+			t.Fatalf("expected pending bytes to promote volume 1 to near-full, got %d", vid)
+		}
+	}
+}
+
+func TestPickForWriteNearFullPreferenceRespectsPlacementConstraint(t *testing.T) {
+	layout := `
+{
+  "dc1":{
+    "rack1":{
+      "server1":{
+        "volumes":[
+          {"id":1, "size":1000, "replication":"000"},
+          {"id":2, "size":9600, "replication":"000"}
+        ],
+        "limit":10
+      }
+    },
+    "rack2":{
+      "server2":{
+        "volumes":[
+          {"id":3, "size":9900, "replication":"000"}
+        ],
+        "limit":10
+      }
+    }
+  }
+}
+`
+	_, vl := setupPickTest(t, layout, 10000)
+	option := &VolumeGrowOption{Rack: "rack1"}
+
+	for i := 0; i < 100; i++ {
+		vid, _, _, _, err := vl.PickForWrite(1, option)
+		if err != nil {
+			t.Fatalf("PickForWrite: %v", err)
+		}
+		if vid != 2 {
+			t.Fatalf("expected near-full volume 2 in rack1, got %d", vid)
+		}
+	}
+}
+
 func TestPickForWriteWithPendingSize(t *testing.T) {
 	layout := `
 {
@@ -707,4 +808,3 @@ func TestShouldGrowVolumesByDcAndRack_WithPendingSize(t *testing.T) {
 		t.Error("should grow after pending pushes volume past crowded threshold")
 	}
 }
-

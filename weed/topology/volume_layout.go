@@ -542,31 +542,62 @@ func (vl *VolumeLayout) PickForWrite(count uint64, option *VolumeGrowOption) (vi
 	if found == 0 {
 		return vid, count, locationList, true, fmt.Errorf("%s in DataCenter:%v Rack:%v DataNode:%v", NoWritableVolumes, option.DataCenter, option.Rack, option.DataNode)
 	}
-	vid, locationList = vl.weightedPick(sample[:found])
+	vid, locationList = vl.pickByFillPolicy(sample[:found])
 	return vid, count, locationList.Copy(), false, nil
 }
 
 // pickSampleSize is how many random candidates to sample before doing a
 // weighted pick. Keeps cost O(1) regardless of total writable volume count
-// while still biasing toward emptier volumes.
+// while still allowing near-full volumes to finish promptly.
 const pickSampleSize = 3
 
+// nearFullWritePreferencePercent is the fill level at which a sampled volume
+// is finished before writes are spread by remaining capacity again.
+const nearFullWritePreferencePercent uint64 = 95
+
 // pickWeightedByRemaining randomly samples a few candidates from the list,
-// then does a weighted pick among them by remaining capacity.
+// then finishes a sampled near-full volume or weights the pick by remaining
+// capacity when every sampled volume is below the threshold.
 // Sampled candidates may repeat when len(candidates) is small relative to
 // pickSampleSize; this is harmless — a repeated volume just gets proportionally
 // more weight, which is a negligible statistical effect.
 func (vl *VolumeLayout) pickWeightedByRemaining(candidates []needle.VolumeId) (needle.VolumeId, *VolumeLocationList) {
 	n := len(candidates)
 	if n <= pickSampleSize {
-		return vl.weightedPick(candidates)
+		return vl.pickByFillPolicy(candidates)
 	}
 
 	var sample [pickSampleSize]needle.VolumeId
 	for i := range sample {
 		sample[i] = candidates[rand.IntN(n)]
 	}
-	return vl.weightedPick(sample[:])
+	return vl.pickByFillPolicy(sample[:])
+}
+
+// pickByFillPolicy finishes the fullest sampled near-full volume. Below the
+// threshold it preserves the existing remaining-capacity weighting, which
+// spreads writes across emptier volumes. Applying the preference only to the
+// bounded sample avoids scanning every writable volume on the assignment hot
+// path and limits write concentration when a layout has many volumes.
+func (vl *VolumeLayout) pickByFillPolicy(candidates []needle.VolumeId) (needle.VolumeId, *VolumeLocationList) {
+	var fullest needle.VolumeId
+	var fullestRemaining uint64
+	foundNearFull := false
+	for _, vid := range candidates {
+		remaining := vl.remainingSize(vid)
+		if remaining*100 > vl.volumeSizeLimit*(100-nearFullWritePreferencePercent) {
+			continue
+		}
+		if !foundNearFull || remaining < fullestRemaining {
+			fullest = vid
+			fullestRemaining = remaining
+			foundNearFull = true
+		}
+	}
+	if foundNearFull {
+		return fullest, vl.vid2location[fullest]
+	}
+	return vl.weightedPick(candidates)
 }
 
 func (vl *VolumeLayout) weightedPick(candidates []needle.VolumeId) (needle.VolumeId, *VolumeLocationList) {
