@@ -25,12 +25,11 @@ func isLargeBlockAligned(volumeSize uint64) bool {
 }
 
 // canReachNextLargeBlockRow reports whether the configured volume size limit
-// leaves room to cross the next large-block row boundary. An unknown limit is
-// treated as reachable so incomplete metrics do not silently disable the
-// alignment grace.
+// leaves room to cross the next large-block row boundary. An unknown limit
+// cannot prove that waiting will help, so it uses the normal quiet period.
 func canReachNextLargeBlockRow(volumeSize, volumeSizeLimit uint64) bool {
 	if volumeSizeLimit == 0 {
-		return true
+		return false
 	}
 	largeRowSize := uint64(ecstorage.DataShardsCount) * uint64(ecstorage.ErasureCodingLargeBlockSize)
 	return volumeSize/largeRowSize < volumeSizeLimit/largeRowSize

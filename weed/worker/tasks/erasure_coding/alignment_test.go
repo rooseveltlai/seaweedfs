@@ -39,7 +39,7 @@ func TestCanReachNextLargeBlockRow(t *testing.T) {
 	assert.True(t, canReachNextLargeBlockRow(30*gib-1, 30*gib))
 	assert.False(t, canReachNextLargeBlockRow(30*gib-1, 30000*mib), "the old 30,000 MiB limit cannot reach 30 GiB")
 	assert.False(t, canReachNextLargeBlockRow(8*gib, 9*gib), "a limit below the first row cannot reach it")
-	assert.True(t, canReachNextLargeBlockRow(30*gib-1, 0), "an unknown limit must not disable the grace")
+	assert.False(t, canReachNextLargeBlockRow(30*gib-1, 0), "an unknown limit cannot prove that waiting will help")
 }
 
 func TestRequiredQuietPeriod(t *testing.T) {
@@ -77,6 +77,10 @@ func TestRequiredQuietPeriod(t *testing.T) {
 	quiet, aligned = requiredQuietPeriod(30*gib-1, 30*gib-1, 0.96, false, false, config)
 	assert.False(t, aligned)
 	assert.Equal(t, time.Hour, quiet, "waiting cannot reach a row beyond the volume limit")
+
+	quiet, aligned = requiredQuietPeriod(30*gib-1, 0, 0.96, false, false, config)
+	assert.False(t, aligned)
+	assert.Equal(t, time.Hour, quiet, "an unknown limit must not introduce a speculative delay")
 
 	config.QuietForSeconds = 96 * 60 * 60
 	quiet, aligned = requiredQuietPeriod(30*gib-1, 30*gib, 0.96, false, false, config)

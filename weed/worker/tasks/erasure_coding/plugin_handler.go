@@ -268,7 +268,7 @@ func (h *ErasureCodingHandler) Detect(
 			ecp.EncodeTsNs = request.DetectionSequence
 		}
 	}
-	if traceErr := emitErasureCodingDetectionDecisionTrace(sender, metrics, workerConfig.TaskConfig, results, maxResults, hasMore); traceErr != nil {
+	if traceErr := emitErasureCodingDetectionDecisionTrace(sender, metrics, activeTopology, workerConfig.TaskConfig, results, maxResults, hasMore); traceErr != nil {
 		glog.Warningf("Plugin worker failed to emit erasure_coding detection trace: %v", traceErr)
 	}
 
@@ -300,6 +300,7 @@ func (h *ErasureCodingHandler) Detect(
 func emitErasureCodingDetectionDecisionTrace(
 	sender pluginworker.DetectionSender,
 	metrics []*workertypes.VolumeHealthMetrics,
+	activeTopology *topology.ActiveTopology,
 	taskConfig *Config,
 	results []*workertypes.TaskDetectionResult,
 	maxResults int,
@@ -352,7 +353,8 @@ func emitErasureCodingDetectionDecisionTrace(
 			skippedCollectionFilter++
 			continue
 		}
-		requiredQuiet, _ := requiredQuietPeriod(metric.Size, metric.VolumeSizeLimit, metric.FullnessRatio, metric.IsReadOnly, false, taskConfig)
+		hasExistingECShards := countExistingEcShardsForVolume(activeTopology, metric.VolumeID, metric.Collection) > 0
+		requiredQuiet, _ := requiredQuietPeriod(metric.Size, metric.VolumeSizeLimit, metric.FullnessRatio, metric.IsReadOnly, hasExistingECShards, taskConfig)
 		if metric.Age < requiredQuiet {
 			skippedQuietTime++
 			continue
@@ -444,7 +446,8 @@ func emitErasureCodingDetectionDecisionTrace(
 			continue
 		}
 		sizeMB := float64(metric.Size) / (1024 * 1024)
-		requiredQuiet, aligned := requiredQuietPeriod(metric.Size, metric.VolumeSizeLimit, metric.FullnessRatio, metric.IsReadOnly, false, taskConfig)
+		hasExistingECShards := countExistingEcShardsForVolume(activeTopology, metric.VolumeID, metric.Collection) > 0
+		requiredQuiet, aligned := requiredQuietPeriod(metric.Size, metric.VolumeSizeLimit, metric.FullnessRatio, metric.IsReadOnly, hasExistingECShards, taskConfig)
 		message := fmt.Sprintf(
 			"ERASURE CODING: Volume %d: size=%.1fMB (need ≥%dMB), age=%s (need ≥%s), fullness=%.1f%% (need ≥%.1f%%), large-block aligned=%t",
 			metric.VolumeID,

@@ -201,9 +201,13 @@ func GetConfigSpec() base.ConfigSpec {
 func (c *Config) ToTaskPolicy() *worker_pb.TaskPolicy {
 	// Defensive copy of PreferredTags to prevent external mutation
 	preferredTagsCopy := append([]string(nil), c.PreferredTags...)
+	quietForSeconds := c.QuietForSeconds
+	if quietForSeconds < 1 {
+		quietForSeconds = 1
+	}
 	unalignedQuietForSeconds := c.UnalignedQuietForSeconds
-	if unalignedQuietForSeconds < c.QuietForSeconds {
-		unalignedQuietForSeconds = c.QuietForSeconds
+	if unalignedQuietForSeconds < quietForSeconds {
+		unalignedQuietForSeconds = quietForSeconds
 	}
 	return &worker_pb.TaskPolicy{
 		Enabled:               c.Enabled,
@@ -213,7 +217,7 @@ func (c *Config) ToTaskPolicy() *worker_pb.TaskPolicy {
 		TaskConfig: &worker_pb.TaskPolicy_ErasureCodingConfig{
 			ErasureCodingConfig: &worker_pb.ErasureCodingTaskConfig{
 				FullnessRatio:            float64(c.FullnessRatio),
-				QuietForSeconds:          int32(c.QuietForSeconds),
+				QuietForSeconds:          int32(quietForSeconds),
 				MinVolumeSizeMb:          int32(c.MinSizeMB),
 				CollectionFilter:         c.CollectionFilter,
 				PreferredTags:            preferredTagsCopy,

@@ -110,7 +110,7 @@ func TestApplyMaintenanceConfigFromTomlClampsZeroUnalignedQuietPeriod(t *testing
 	cp := NewConfigPersistence(dir)
 	v := tomlConfig(t, `
 [maintenance.erasure_coding]
-quiet_for_seconds = 7200
+quiet_for_seconds = 0
 unaligned_quiet_for_seconds = 0
 `)
 
@@ -119,8 +119,11 @@ unaligned_quiet_for_seconds = 0
 	}
 
 	ecConf := erasure_coding.LoadConfigFromPersistence(cp)
-	if ecConf.UnalignedQuietForSeconds != 7200 {
-		t.Errorf("unaligned quiet for = %v, want normal quiet period 7200", ecConf.UnalignedQuietForSeconds)
+	if ecConf.QuietForSeconds != 1 {
+		t.Errorf("quiet for = %v, want minimum 1", ecConf.QuietForSeconds)
+	}
+	if ecConf.UnalignedQuietForSeconds != 1 {
+		t.Errorf("unaligned quiet for = %v, want normal quiet period 1", ecConf.UnalignedQuietForSeconds)
 	}
 }
 

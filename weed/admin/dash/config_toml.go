@@ -60,6 +60,9 @@ func (cp *ConfigPersistence) ApplyMaintenanceConfigFromToml(v TomlConfig) error 
 	}
 	if k := "maintenance.erasure_coding.quiet_for_seconds"; v.IsSet(k) {
 		ecConf.QuietForSeconds = v.GetInt(k)
+		if ecConf.QuietForSeconds < 1 {
+			ecConf.QuietForSeconds = 1
+		}
 		ecChanged = true
 	}
 	if k := "maintenance.erasure_coding.unaligned_quiet_for_seconds"; v.IsSet(k) {

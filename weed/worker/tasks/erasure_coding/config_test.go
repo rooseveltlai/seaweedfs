@@ -45,3 +45,18 @@ func TestConfigPersistsUnalignedQuietPeriodAtLeastNormalQuietPeriod(t *testing.T
 	require.NoError(t, loaded.FromTaskPolicy(policy))
 	require.Equal(t, config.QuietForSeconds, loaded.UnalignedQuietForSeconds)
 }
+
+func TestConfigPersistsPositiveQuietPeriods(t *testing.T) {
+	config := NewDefaultConfig()
+	config.QuietForSeconds = 0
+	config.UnalignedQuietForSeconds = 0
+
+	policy := config.ToTaskPolicy()
+	require.Equal(t, int32(1), policy.GetErasureCodingConfig().GetQuietForSeconds())
+	require.Equal(t, int32(1), policy.GetErasureCodingConfig().GetUnalignedQuietForSeconds())
+
+	loaded := NewDefaultConfig()
+	require.NoError(t, loaded.FromTaskPolicy(policy))
+	require.Equal(t, 1, loaded.QuietForSeconds)
+	require.Equal(t, 1, loaded.UnalignedQuietForSeconds)
+}

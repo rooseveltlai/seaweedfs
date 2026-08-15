@@ -253,7 +253,7 @@ func TestEmitErasureCodingDetectionDecisionTraceNoTasks(t *testing.T) {
 		},
 	}
 
-	if err := emitErasureCodingDetectionDecisionTrace(sender, metrics, config, nil, 0, false); err != nil {
+	if err := emitErasureCodingDetectionDecisionTrace(sender, metrics, nil, config, nil, 0, false); err != nil {
 		t.Fatalf("emitErasureCodingDetectionDecisionTrace error: %v", err)
 	}
 	if len(sender.events) < 4 {
@@ -268,6 +268,45 @@ func TestEmitErasureCodingDetectionDecisionTraceNoTasks(t *testing.T) {
 	}
 	if !strings.Contains(sender.events[1].Message, "ERASURE CODING: Volume 20: size=0.0MB") {
 		t.Fatalf("unexpected first detail message: %q", sender.events[1].Message)
+	}
+}
+
+func TestEmitErasureCodingDetectionDecisionTraceAllowsPartialShardRecovery(t *testing.T) {
+	const gib = uint64(1024 * 1024 * 1024)
+	const volumeID uint32 = 43
+	sender := &recordingDetectionSender{}
+	config := NewDefaultConfig()
+	activeTopology := buildStuckSourceTopology(t, volumeID, ecstorage.DataShardsCount-1)
+	metrics := []*workertypes.VolumeHealthMetrics{{
+		VolumeID:        volumeID,
+		Size:            30*gib - 1,
+		VolumeSizeLimit: 30 * gib,
+		FullnessRatio:   0.96,
+		Age:             2 * time.Hour,
+	}}
+	results := []*workertypes.TaskDetectionResult{{VolumeID: volumeID}}
+
+	if err := emitErasureCodingDetectionDecisionTrace(sender, metrics, activeTopology, config, results, 0, false); err != nil {
+		t.Fatalf("emitErasureCodingDetectionDecisionTrace error: %v", err)
+	}
+
+	var summary, detail *plugin_pb.ActivityEvent
+	for _, event := range sender.events {
+		switch event.Stage {
+		case "decision_summary":
+			summary = event
+		case "decision_volume":
+			detail = event
+		}
+	}
+	if summary == nil || detail == nil {
+		t.Fatalf("expected summary and detail events, got %d events", len(sender.events))
+	}
+	if got := summary.Details["skipped_not_quiet"].GetInt64Value(); got != 0 {
+		t.Fatalf("skipped_not_quiet = %d, want 0 for partial-shard recovery", got)
+	}
+	if got := detail.Details["required_quiet_for_seconds"].GetInt64Value(); got != int64(config.QuietForSeconds) {
+		t.Fatalf("required quiet period = %d, want %d", got, config.QuietForSeconds)
 	}
 }
 
