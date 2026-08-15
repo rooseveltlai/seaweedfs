@@ -206,10 +206,10 @@ func Detection(ctx context.Context, metrics []*types.VolumeHealthMetrics, cluste
 			continue
 		}
 
-		// Poorly aligned volumes wait longer for another write to cross the next
-		// large-block row boundary. The longer threshold is still finite so cold
-		// volumes do not remain replicated indefinitely.
-		requiredQuiet, aligned := requiredQuietPeriod(metric.Size, ecConfig)
+		// Poorly aligned partial volumes wait longer for another write to cross
+		// the next large-block row boundary. Full and read-only volumes use the
+		// normal threshold because they cannot improve their alignment.
+		requiredQuiet, aligned := requiredQuietPeriod(metric.Size, metric.FullnessRatio, metric.IsReadOnly, ecConfig)
 
 		// Check quiet duration and fullness criteria
 		if metric.Age >= requiredQuiet && metric.FullnessRatio >= ecConfig.FullnessRatio {
@@ -432,7 +432,7 @@ func Detection(ctx context.Context, metrics []*types.VolumeHealthMetrics, cluste
 				continue
 			}
 			sizeMB := float64(metric.Size) / (1024 * 1024)
-			requiredQuiet, aligned := requiredQuietPeriod(metric.Size, ecConfig)
+			requiredQuiet, aligned := requiredQuietPeriod(metric.Size, metric.FullnessRatio, metric.IsReadOnly, ecConfig)
 			glog.V(1).Infof("ERASURE CODING: Volume %d: size=%.1fMB (need ≥%dMB), age=%s (need ≥%s), fullness=%.1f%% (need ≥%.1f%%), large-block aligned=%t",
 				metric.VolumeID, sizeMB, ecConfig.MinSizeMB, metric.Age.Truncate(time.Minute), requiredQuiet.Truncate(time.Minute),
 				metric.FullnessRatio*100, ecConfig.FullnessRatio*100, aligned)

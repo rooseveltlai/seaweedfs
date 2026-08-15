@@ -2977,7 +2977,7 @@ type ErasureCodingTaskConfig struct {
 	CollectionFilter         string                 `protobuf:"bytes,4,opt,name=collection_filter,json=collectionFilter,proto3" json:"collection_filter,omitempty"`                              // Only process volumes from specific collections
 	PreferredTags            []string               `protobuf:"bytes,5,rep,name=preferred_tags,json=preferredTags,proto3" json:"preferred_tags,omitempty"`                                       // Disk tags to prioritize for EC shard placement
 	ReplicaPlacement         string                 `protobuf:"bytes,6,opt,name=replica_placement,json=replicaPlacement,proto3" json:"replica_placement,omitempty"`                              // EC shard replica placement (e.g. "020"); empty falls back to master default replication
-	UnalignedQuietForSeconds int32                  `protobuf:"varint,7,opt,name=unaligned_quiet_for_seconds,json=unalignedQuietForSeconds,proto3" json:"unaligned_quiet_for_seconds,omitempty"` // Quiet time for volumes with a large small-block EC tail
+	UnalignedQuietForSeconds int32                  `protobuf:"varint,7,opt,name=unaligned_quiet_for_seconds,json=unalignedQuietForSeconds,proto3" json:"unaligned_quiet_for_seconds,omitempty"` // Quiet time for partial volumes with a large small-block EC tail
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }

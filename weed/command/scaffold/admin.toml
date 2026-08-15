@@ -44,7 +44,7 @@
 # fullness_ratio = 0.95
 # only erasure code volumes not modified for this long
 # quiet_for_seconds = 3600
-# poorly aligned volumes must remain unmodified for this long
+# poorly aligned partial volumes must remain unmodified for this long
 # unaligned_quiet_for_seconds = 259200
 # scan_interval_seconds = 3600
 # max_concurrent = 1

@@ -22,11 +22,13 @@ func isLargeBlockAligned(volumeSize uint64) bool {
 	return smallTailSize*100 <= volumeSize*maxAlignedSmallTailPercent
 }
 
-func requiredQuietPeriod(volumeSize uint64, config *Config) (time.Duration, bool) {
+func requiredQuietPeriod(volumeSize uint64, fullnessRatio float64, readOnly bool, config *Config) (time.Duration, bool) {
 	quietPeriod := time.Duration(config.QuietForSeconds) * time.Second
 	aligned := isLargeBlockAligned(volumeSize)
-	if aligned {
-		return quietPeriod, true
+	// Waiting can only improve alignment while the volume can still receive
+	// writes. Full and explicitly read-only volumes have no such opportunity.
+	if aligned || fullnessRatio >= 1 || readOnly {
+		return quietPeriod, aligned
 	}
 
 	unalignedQuietPeriod := time.Duration(config.UnalignedQuietForSeconds) * time.Second

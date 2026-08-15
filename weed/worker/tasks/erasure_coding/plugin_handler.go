@@ -114,7 +114,7 @@ func (h *ErasureCodingHandler) Descriptor() *plugin_pb.JobTypeDescriptor {
 						{
 							Name:        "unaligned_quiet_for_seconds",
 							Label:       "Unaligned Quiet Period (s)",
-							Description: "Poorly aligned volumes must remain unmodified for this duration before EC.",
+							Description: "Poorly aligned partial volumes must remain unmodified for this duration before EC.",
 							FieldType:   plugin_pb.ConfigFieldType_CONFIG_FIELD_TYPE_INT64,
 							Widget:      plugin_pb.ConfigWidget_CONFIG_WIDGET_NUMBER,
 							Required:    true,
@@ -352,7 +352,7 @@ func emitErasureCodingDetectionDecisionTrace(
 			skippedCollectionFilter++
 			continue
 		}
-		requiredQuiet, _ := requiredQuietPeriod(metric.Size, taskConfig)
+		requiredQuiet, _ := requiredQuietPeriod(metric.Size, metric.FullnessRatio, metric.IsReadOnly, taskConfig)
 		if metric.Age < requiredQuiet {
 			skippedQuietTime++
 			continue
@@ -444,7 +444,7 @@ func emitErasureCodingDetectionDecisionTrace(
 			continue
 		}
 		sizeMB := float64(metric.Size) / (1024 * 1024)
-		requiredQuiet, aligned := requiredQuietPeriod(metric.Size, taskConfig)
+		requiredQuiet, aligned := requiredQuietPeriod(metric.Size, metric.FullnessRatio, metric.IsReadOnly, taskConfig)
 		message := fmt.Sprintf(
 			"ERASURE CODING: Volume %d: size=%.1fMB (need ≥%dMB), age=%s (need ≥%s), fullness=%.1f%% (need ≥%.1f%%), large-block aligned=%t",
 			metric.VolumeID,

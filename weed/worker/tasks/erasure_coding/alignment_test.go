@@ -34,16 +34,24 @@ func TestRequiredQuietPeriod(t *testing.T) {
 	const gib = uint64(1024 * 1024 * 1024)
 	config := NewDefaultConfig()
 
-	quiet, aligned := requiredQuietPeriod(30*gib, config)
+	quiet, aligned := requiredQuietPeriod(30*gib, 0.96, false, config)
 	assert.True(t, aligned)
 	assert.Equal(t, time.Hour, quiet)
 
-	quiet, aligned = requiredQuietPeriod(30*gib-1, config)
+	quiet, aligned = requiredQuietPeriod(30*gib-1, 0.96, false, config)
 	assert.False(t, aligned)
 	assert.Equal(t, 72*time.Hour, quiet)
 
+	quiet, aligned = requiredQuietPeriod(30*gib-1, 1, false, config)
+	assert.False(t, aligned)
+	assert.Equal(t, time.Hour, quiet, "a full volume cannot improve its alignment")
+
+	quiet, aligned = requiredQuietPeriod(30*gib-1, 0.96, true, config)
+	assert.False(t, aligned)
+	assert.Equal(t, time.Hour, quiet, "a read-only volume cannot improve its alignment")
+
 	config.QuietForSeconds = 96 * 60 * 60
-	quiet, aligned = requiredQuietPeriod(30*gib-1, config)
+	quiet, aligned = requiredQuietPeriod(30*gib-1, 0.96, false, config)
 	assert.False(t, aligned)
 	assert.Equal(t, 96*time.Hour, quiet, "unaligned policy must not shorten the normal quiet period")
 }

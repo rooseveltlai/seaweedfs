@@ -377,7 +377,7 @@ message ErasureCodingTaskConfig {
   string collection_filter = 4;     // Only process volumes from specific collections
   repeated string preferred_tags = 5; // Disk tags to prioritize for EC shard placement
   string replica_placement = 6;     // EC shard replica placement (e.g. "020"); empty falls back to master default replication
-  int32 unaligned_quiet_for_seconds = 7; // Quiet time for volumes with a large small-block EC tail
+  int32 unaligned_quiet_for_seconds = 7; // Quiet time for partial volumes with a large small-block EC tail
 }
 
 // BalanceTaskConfig contains balance-specific configuration

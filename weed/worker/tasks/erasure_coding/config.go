@@ -32,7 +32,7 @@ func NewDefaultConfig() *Config {
 			MaxConcurrent:       1,
 		},
 		QuietForSeconds:          3600,                            // 1 hour, matching the shell ec.encode -quietFor default
-		UnalignedQuietForSeconds: defaultUnalignedQuietForSeconds, // 72 hours gives nearly full volumes time to cross an EC row boundary
+		UnalignedQuietForSeconds: defaultUnalignedQuietForSeconds, // 72 hours gives partial volumes time to cross an EC row boundary
 		FullnessRatio:            0.95,                            // 95%, matching the shell ec.encode -fullPercent default
 		CollectionFilter:         "",
 		MinSizeMB:                30, // 30MB (more reasonable than 100MB)
@@ -113,8 +113,8 @@ func GetConfigSpec() base.ConfigSpec {
 				MaxValue:     30 * 24 * 60 * 60,
 				Required:     true,
 				DisplayName:  "Unaligned Quiet Period",
-				Description:  "Minimum quiet time for volumes with more than 1% of their data in the EC small-block tail",
-				HelpText:     "Poorly aligned volumes wait longer for more writes, then remain eligible so they are not replicated indefinitely",
+				Description:  "Minimum quiet time for partially filled volumes with more than 1% of their data in the EC small-block tail",
+				HelpText:     "Poorly aligned partial volumes wait longer for more writes, then remain eligible so they are not replicated indefinitely",
 				Placeholder:  "72",
 				Unit:         config.UnitHours,
 				InputType:    "interval",

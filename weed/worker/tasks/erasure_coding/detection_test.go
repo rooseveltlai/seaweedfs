@@ -234,14 +234,16 @@ func TestDetectionUsesLongerQuietPeriodForUnalignedVolumes(t *testing.T) {
 	const gib = uint64(1024 * 1024 * 1024)
 
 	tests := []struct {
-		name string
-		size uint64
-		age  time.Duration
-		want int
+		name     string
+		size     uint64
+		fullness float64
+		age      time.Duration
+		want     int
 	}{
-		{name: "aligned volume uses normal quiet period", size: 30 * gib, age: 2 * time.Hour, want: 1},
-		{name: "unaligned volume waits", size: 30*gib - 1, age: 2 * time.Hour, want: 0},
-		{name: "unaligned volume remains eligible after grace", size: 30*gib - 1, age: 73 * time.Hour, want: 1},
+		{name: "aligned partial volume uses normal quiet period", size: 30 * gib, fullness: 0.96, age: 2 * time.Hour, want: 1},
+		{name: "unaligned partial volume waits", size: 30*gib - 1, fullness: 0.96, age: 2 * time.Hour, want: 0},
+		{name: "unaligned partial volume remains eligible after grace", size: 30*gib - 1, fullness: 0.96, age: 73 * time.Hour, want: 1},
+		{name: "unaligned full volume uses normal quiet period", size: 30*gib - 1, fullness: 1, age: 2 * time.Hour, want: 1},
 	}
 
 	for _, tt := range tests {
@@ -252,7 +254,7 @@ func TestDetectionUsesLongerQuietPeriodForUnalignedVolumes(t *testing.T) {
 				VolumeID:      1,
 				Server:        "10.0.0.1:8080",
 				Size:          tt.size,
-				FullnessRatio: 0.96,
+				FullnessRatio: tt.fullness,
 				Age:           tt.age,
 			}
 
