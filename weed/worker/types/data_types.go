@@ -55,6 +55,7 @@ type VolumeHealthMetrics struct {
 	HasRemoteCopy    bool
 	IsECVolume       bool
 	FullnessRatio    float64
+	VolumeSizeLimit  uint64 // master-configured limit in bytes; zero if unknown
 }
 
 // VolumeServerInfo contains information about a volume server (simplified)

@@ -374,7 +374,7 @@ func (cp *ConfigPersistence) LoadErasureCodingTaskConfig() (*ErasureCodingTaskCo
 	return &ErasureCodingTaskConfig{
 		FullnessRatio:            0.9,
 		QuietForSeconds:          3600,
-		UnalignedQuietForSeconds: 72 * 60 * 60,
+		UnalignedQuietForSeconds: erasure_coding.DefaultUnalignedQuietForSeconds,
 		MinVolumeSizeMb:          1024,
 		CollectionFilter:         "",
 	}, nil
@@ -393,7 +393,7 @@ func (cp *ConfigPersistence) LoadErasureCodingTaskPolicy() (*worker_pb.TaskPolic
 				ErasureCodingConfig: &worker_pb.ErasureCodingTaskConfig{
 					FullnessRatio:            0.9,
 					QuietForSeconds:          3600,
-					UnalignedQuietForSeconds: 72 * 60 * 60,
+					UnalignedQuietForSeconds: erasure_coding.DefaultUnalignedQuietForSeconds,
 					MinVolumeSizeMb:          1024,
 					CollectionFilter:         "",
 				},
@@ -416,7 +416,7 @@ func (cp *ConfigPersistence) LoadErasureCodingTaskPolicy() (*worker_pb.TaskPolic
 				ErasureCodingConfig: &worker_pb.ErasureCodingTaskConfig{
 					FullnessRatio:            0.9,
 					QuietForSeconds:          3600,
-					UnalignedQuietForSeconds: 72 * 60 * 60,
+					UnalignedQuietForSeconds: erasure_coding.DefaultUnalignedQuietForSeconds,
 					MinVolumeSizeMb:          1024,
 					CollectionFilter:         "",
 				},

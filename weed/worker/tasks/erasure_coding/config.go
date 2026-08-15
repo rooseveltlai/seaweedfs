@@ -9,7 +9,9 @@ import (
 	"github.com/seaweedfs/seaweedfs/weed/worker/tasks/base"
 )
 
-const defaultUnalignedQuietForSeconds = 72 * 60 * 60
+// DefaultUnalignedQuietForSeconds gives writable partial volumes three days to
+// cross a reachable EC large-row boundary.
+const DefaultUnalignedQuietForSeconds = 72 * 60 * 60
 
 // Config extends BaseConfig with erasure coding specific settings
 type Config struct {
@@ -32,7 +34,7 @@ func NewDefaultConfig() *Config {
 			MaxConcurrent:       1,
 		},
 		QuietForSeconds:          3600,                            // 1 hour, matching the shell ec.encode -quietFor default
-		UnalignedQuietForSeconds: defaultUnalignedQuietForSeconds, // 72 hours gives partial volumes time to cross an EC row boundary
+		UnalignedQuietForSeconds: DefaultUnalignedQuietForSeconds, // 72 hours gives partial volumes time to cross an EC row boundary
 		FullnessRatio:            0.95,                            // 95%, matching the shell ec.encode -fullPercent default
 		CollectionFilter:         "",
 		MinSizeMB:                30, // 30MB (more reasonable than 100MB)
@@ -108,7 +110,7 @@ func GetConfigSpec() base.ConfigSpec {
 				Name:         "unaligned_quiet_for_seconds",
 				JSONName:     "unaligned_quiet_for_seconds",
 				Type:         config.FieldTypeInterval,
-				DefaultValue: defaultUnalignedQuietForSeconds,
+				DefaultValue: DefaultUnalignedQuietForSeconds,
 				MinValue:     60 * 60,
 				MaxValue:     30 * 24 * 60 * 60,
 				Required:     true,
@@ -199,6 +201,10 @@ func GetConfigSpec() base.ConfigSpec {
 func (c *Config) ToTaskPolicy() *worker_pb.TaskPolicy {
 	// Defensive copy of PreferredTags to prevent external mutation
 	preferredTagsCopy := append([]string(nil), c.PreferredTags...)
+	unalignedQuietForSeconds := c.UnalignedQuietForSeconds
+	if unalignedQuietForSeconds < c.QuietForSeconds {
+		unalignedQuietForSeconds = c.QuietForSeconds
+	}
 	return &worker_pb.TaskPolicy{
 		Enabled:               c.Enabled,
 		MaxConcurrent:         int32(c.MaxConcurrent),
@@ -212,7 +218,7 @@ func (c *Config) ToTaskPolicy() *worker_pb.TaskPolicy {
 				CollectionFilter:         c.CollectionFilter,
 				PreferredTags:            preferredTagsCopy,
 				ReplicaPlacement:         c.ReplicaPlacement,
-				UnalignedQuietForSeconds: int32(c.UnalignedQuietForSeconds),
+				UnalignedQuietForSeconds: int32(unalignedQuietForSeconds),
 			},
 		},
 	}
@@ -237,7 +243,7 @@ func (c *Config) FromTaskPolicy(policy *worker_pb.TaskPolicy) error {
 			c.UnalignedQuietForSeconds = int(ecConfig.UnalignedQuietForSeconds)
 		} else if c.UnalignedQuietForSeconds <= 0 {
 			// Policies persisted before this field was added decode it as zero.
-			c.UnalignedQuietForSeconds = defaultUnalignedQuietForSeconds
+			c.UnalignedQuietForSeconds = DefaultUnalignedQuietForSeconds
 		}
 		c.MinSizeMB = int(ecConfig.MinVolumeSizeMb)
 		c.CollectionFilter = ecConfig.CollectionFilter

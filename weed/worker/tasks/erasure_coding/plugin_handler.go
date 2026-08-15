@@ -163,7 +163,7 @@ func (h *ErasureCodingHandler) Descriptor() *plugin_pb.JobTypeDescriptor {
 					Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: 3600},
 				},
 				"unaligned_quiet_for_seconds": {
-					Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: defaultUnalignedQuietForSeconds},
+					Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: DefaultUnalignedQuietForSeconds},
 				},
 				"fullness_ratio": {
 					Kind: &plugin_pb.ConfigValue_DoubleValue{DoubleValue: 0.95},
@@ -196,7 +196,7 @@ func (h *ErasureCodingHandler) Descriptor() *plugin_pb.JobTypeDescriptor {
 				Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: 3600},
 			},
 			"unaligned_quiet_for_seconds": {
-				Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: defaultUnalignedQuietForSeconds},
+				Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: DefaultUnalignedQuietForSeconds},
 			},
 			"fullness_ratio": {
 				Kind: &plugin_pb.ConfigValue_DoubleValue{DoubleValue: 0.95},
@@ -352,7 +352,7 @@ func emitErasureCodingDetectionDecisionTrace(
 			skippedCollectionFilter++
 			continue
 		}
-		requiredQuiet, _ := requiredQuietPeriod(metric.Size, metric.FullnessRatio, metric.IsReadOnly, taskConfig)
+		requiredQuiet, _ := requiredQuietPeriod(metric.Size, metric.VolumeSizeLimit, metric.FullnessRatio, metric.IsReadOnly, false, taskConfig)
 		if metric.Age < requiredQuiet {
 			skippedQuietTime++
 			continue
@@ -444,7 +444,7 @@ func emitErasureCodingDetectionDecisionTrace(
 			continue
 		}
 		sizeMB := float64(metric.Size) / (1024 * 1024)
-		requiredQuiet, aligned := requiredQuietPeriod(metric.Size, metric.FullnessRatio, metric.IsReadOnly, taskConfig)
+		requiredQuiet, aligned := requiredQuietPeriod(metric.Size, metric.VolumeSizeLimit, metric.FullnessRatio, metric.IsReadOnly, false, taskConfig)
 		message := fmt.Sprintf(
 			"ERASURE CODING: Volume %d: size=%.1fMB (need ≥%dMB), age=%s (need ≥%s), fullness=%.1f%% (need ≥%.1f%%), large-block aligned=%t",
 			metric.VolumeID,

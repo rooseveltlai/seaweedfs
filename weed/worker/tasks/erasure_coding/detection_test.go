@@ -8,6 +8,7 @@ import (
 
 	"github.com/seaweedfs/seaweedfs/weed/admin/topology"
 	"github.com/seaweedfs/seaweedfs/weed/pb/master_pb"
+	"github.com/seaweedfs/seaweedfs/weed/pb/worker_pb"
 	"github.com/seaweedfs/seaweedfs/weed/storage/erasure_coding"
 	"github.com/seaweedfs/seaweedfs/weed/storage/erasure_coding/ecbalancer"
 	"github.com/seaweedfs/seaweedfs/weed/worker/types"
@@ -73,18 +74,8 @@ func TestDetectionAllowsRegularReplicaWhenShardsPartial(t *testing.T) {
 
 	results, _, err := Detection(context.Background(), metrics, clusterInfo, NewDefaultConfig(), 0)
 	require.NoError(t, err)
-	// Partial shards are not a "stuck source" — the encode arm must keep
-	// its chance to either propose a fresh task that folds the partial
-	// shards into cleanup, or fail planning on the constrained topology.
-	// We don't require len(results) > 0 because the constrained topology
-	// (one disk per node, the orphaned shards already taking slots) can
-	// legitimately fail destination planning. The assertion that matters
-	// is: the #9448 guard did NOT silently swallow the volume into a
-	// skippedAlreadyEC counter, and any emitted result is still an EC
-	// task and not a no-op.
-	for _, r := range results {
-		require.Equal(t, types.TaskTypeErasureCoding, r.TaskType, "any emitted result should still be an EC task, not a no-op")
-	}
+	require.Len(t, results, 1, "leftover shards must bypass the alignment grace and enter recovery planning")
+	require.Equal(t, types.TaskTypeErasureCoding, results[0].TaskType)
 }
 
 // buildStuckSourceTopology constructs a topology that mimics the #9448 stuck
@@ -139,7 +130,7 @@ func buildStuckSourceTopology(t *testing.T, volumeID uint32, presentShardCount i
 // criteria (Age, FullnessRatio, Size), with `Age` derived from `LastModified`
 // so the two fields stay consistent for any reader.
 func buildStuckSourceMetrics(volumeID uint32, server string) []*types.VolumeHealthMetrics {
-	lastModified := time.Now().Add(-73 * time.Hour)
+	lastModified := time.Now().Add(-2 * time.Hour)
 	return []*types.VolumeHealthMetrics{{
 		VolumeID:      volumeID,
 		Server:        server,
@@ -234,16 +225,20 @@ func TestDetectionUsesLongerQuietPeriodForUnalignedVolumes(t *testing.T) {
 	const gib = uint64(1024 * 1024 * 1024)
 
 	tests := []struct {
-		name     string
-		size     uint64
-		fullness float64
-		age      time.Duration
-		want     int
+		name            string
+		size            uint64
+		volumeSizeLimit uint64
+		fullness        float64
+		readOnly        bool
+		age             time.Duration
+		want            int
 	}{
-		{name: "aligned partial volume uses normal quiet period", size: 30 * gib, fullness: 0.96, age: 2 * time.Hour, want: 1},
-		{name: "unaligned partial volume waits", size: 30*gib - 1, fullness: 0.96, age: 2 * time.Hour, want: 0},
-		{name: "unaligned partial volume remains eligible after grace", size: 30*gib - 1, fullness: 0.96, age: 73 * time.Hour, want: 1},
-		{name: "unaligned full volume uses normal quiet period", size: 30*gib - 1, fullness: 1, age: 2 * time.Hour, want: 1},
+		{name: "aligned partial volume uses normal quiet period", size: 30 * gib, volumeSizeLimit: 40 * gib, fullness: 0.96, age: 2 * time.Hour, want: 1},
+		{name: "unaligned partial volume waits", size: 30*gib - 1, volumeSizeLimit: 30 * gib, fullness: 0.96, age: 2 * time.Hour, want: 0},
+		{name: "unaligned partial volume remains eligible after grace", size: 30*gib - 1, volumeSizeLimit: 30 * gib, fullness: 0.96, age: 73 * time.Hour, want: 1},
+		{name: "unreachable boundary uses normal quiet period", size: 30*gib - 1, volumeSizeLimit: 30*gib - 1, fullness: 0.96, age: 2 * time.Hour, want: 1},
+		{name: "unaligned full volume uses normal quiet period", size: 30*gib - 1, volumeSizeLimit: 30 * gib, fullness: 1, age: 2 * time.Hour, want: 1},
+		{name: "unaligned read-only volume uses normal quiet period", size: 30*gib - 1, volumeSizeLimit: 30 * gib, fullness: 0.96, readOnly: true, age: 2 * time.Hour, want: 1},
 	}
 
 	for _, tt := range tests {
@@ -251,11 +246,13 @@ func TestDetectionUsesLongerQuietPeriodForUnalignedVolumes(t *testing.T) {
 			activeTopology := buildActiveTopology(t, erasure_coding.TotalShardsCount, []string{"hdd"}, 20, 0)
 			clusterInfo := &types.ClusterInfo{ActiveTopology: activeTopology}
 			metric := &types.VolumeHealthMetrics{
-				VolumeID:      1,
-				Server:        "10.0.0.1:8080",
-				Size:          tt.size,
-				FullnessRatio: tt.fullness,
-				Age:           tt.age,
+				VolumeID:        1,
+				Server:          "10.0.0.1:8080",
+				Size:            tt.size,
+				VolumeSizeLimit: tt.volumeSizeLimit,
+				FullnessRatio:   tt.fullness,
+				IsReadOnly:      tt.readOnly,
+				Age:             tt.age,
 			}
 
 			results, _, err := Detection(context.Background(), []*types.VolumeHealthMetrics{metric}, clusterInfo, NewDefaultConfig(), 0)
@@ -263,6 +260,39 @@ func TestDetectionUsesLongerQuietPeriodForUnalignedVolumes(t *testing.T) {
 			require.Len(t, results, tt.want)
 		})
 	}
+}
+
+func TestDetectionUsesDefaultGraceForLegacyPolicy(t *testing.T) {
+	const gib = uint64(1024 * 1024 * 1024)
+	policy := &worker_pb.TaskPolicy{
+		Enabled:               true,
+		MaxConcurrent:         1,
+		RepeatIntervalSeconds: 3600,
+		TaskConfig: &worker_pb.TaskPolicy_ErasureCodingConfig{
+			ErasureCodingConfig: &worker_pb.ErasureCodingTaskConfig{
+				FullnessRatio:   0.95,
+				QuietForSeconds: 3600,
+				MinVolumeSizeMb: 30,
+				// UnalignedQuietForSeconds is absent in a legacy policy.
+			},
+		},
+	}
+	config := NewDefaultConfig()
+	require.NoError(t, config.FromTaskPolicy(policy))
+
+	activeTopology := buildActiveTopology(t, erasure_coding.TotalShardsCount, []string{"hdd"}, 20, 0)
+	metric := &types.VolumeHealthMetrics{
+		VolumeID:        1,
+		Server:          "10.0.0.1:8080",
+		Size:            30*gib - 1,
+		VolumeSizeLimit: 30 * gib,
+		FullnessRatio:   0.96,
+		Age:             2 * time.Hour,
+	}
+
+	results, _, err := Detection(context.Background(), []*types.VolumeHealthMetrics{metric}, &types.ClusterInfo{ActiveTopology: activeTopology}, config, 0)
+	require.NoError(t, err)
+	require.Empty(t, results, "legacy policies should retain the default alignment grace")
 }
 
 // #9369: 7 servers × 2 physical HDDs must yield 14 distinct (server, disk_id)

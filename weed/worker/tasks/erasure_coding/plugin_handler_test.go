@@ -136,6 +136,22 @@ func TestDeriveErasureCodingWorkerConfig(t *testing.T) {
 	}
 }
 
+func TestDeriveErasureCodingWorkerConfigClampsUnalignedQuietPeriod(t *testing.T) {
+	values := map[string]*plugin_pb.ConfigValue{
+		"quiet_for_seconds": {
+			Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: 7200},
+		},
+		"unaligned_quiet_for_seconds": {
+			Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: 3600},
+		},
+	}
+
+	cfg := deriveErasureCodingWorkerConfig(values)
+	if cfg.TaskConfig.UnalignedQuietForSeconds != 7200 {
+		t.Fatalf("expected unaligned quiet period to clamp to 7200, got %d", cfg.TaskConfig.UnalignedQuietForSeconds)
+	}
+}
+
 func TestBuildErasureCodingProposal(t *testing.T) {
 	params := &worker_pb.TaskParams{
 		TaskId:     "ec-task-1",

@@ -11,7 +11,9 @@ const maxAlignedSmallTailPercent uint64 = 1
 // isLargeBlockAligned reports whether at most one percent of the volume would
 // be encoded with small blocks. This is intentionally one-sided: a volume just
 // below a large-row boundary has almost a full row of small blocks and is not
-// aligned, while a volume just above it has only a small tail.
+// aligned, while a volume just above it has only a small tail. The threshold
+// is relative to the whole volume, so very large volumes can treat even a
+// sizable absolute tail as negligible.
 func isLargeBlockAligned(volumeSize uint64) bool {
 	if volumeSize == 0 {
 		return false
@@ -22,12 +24,25 @@ func isLargeBlockAligned(volumeSize uint64) bool {
 	return smallTailSize*100 <= volumeSize*maxAlignedSmallTailPercent
 }
 
-func requiredQuietPeriod(volumeSize uint64, fullnessRatio float64, readOnly bool, config *Config) (time.Duration, bool) {
+// canReachNextLargeBlockRow reports whether the configured volume size limit
+// leaves room to cross the next large-block row boundary. An unknown limit is
+// treated as reachable so incomplete metrics do not silently disable the
+// alignment grace.
+func canReachNextLargeBlockRow(volumeSize, volumeSizeLimit uint64) bool {
+	if volumeSizeLimit == 0 {
+		return true
+	}
+	largeRowSize := uint64(ecstorage.DataShardsCount) * uint64(ecstorage.ErasureCodingLargeBlockSize)
+	return volumeSize/largeRowSize < volumeSizeLimit/largeRowSize
+}
+
+func requiredQuietPeriod(volumeSize, volumeSizeLimit uint64, fullnessRatio float64, readOnly, hasExistingECShards bool, config *Config) (time.Duration, bool) {
 	quietPeriod := time.Duration(config.QuietForSeconds) * time.Second
 	aligned := isLargeBlockAligned(volumeSize)
 	// Waiting can only improve alignment while the volume can still receive
-	// writes. Full and explicitly read-only volumes have no such opportunity.
-	if aligned || fullnessRatio >= 1 || readOnly {
+	// writes and the next row boundary is below its size limit. Leftover shards
+	// need prompt recovery or cleanup rather than more source-volume writes.
+	if aligned || fullnessRatio >= 1 || readOnly || hasExistingECShards || !canReachNextLargeBlockRow(volumeSize, volumeSizeLimit) {
 		return quietPeriod, aligned
 	}
 

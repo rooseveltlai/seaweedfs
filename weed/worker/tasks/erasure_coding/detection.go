@@ -148,10 +148,11 @@ func Detection(ctx context.Context, metrics []*types.VolumeHealthMetrics, cluste
 		// (around the `existingECShards` block) should keep its chance to
 		// fold the partial shards into the new task. Counting walks
 		// EcIndexBits to handle a single info entry carrying multiple shards.
+		existingECShardCount := 0
 		if clusterInfo.ActiveTopology != nil {
-			shardCount := countExistingEcShardsForVolume(clusterInfo.ActiveTopology, metric.VolumeID, metric.Collection)
+			existingECShardCount = countExistingEcShardsForVolume(clusterInfo.ActiveTopology, metric.VolumeID, metric.Collection)
 			totalShards := erasure_coding.DataShardsCount + erasure_coding.ParityShardsCount
-			if shardCount >= totalShards {
+			if existingECShardCount >= totalShards {
 				glog.Warningf("EC Detection: Volume %d has all %d EC shards in topology; "+
 					"source replica on %s is orphaned (#9448).",
 					metric.VolumeID, totalShards, metric.Server)
@@ -207,9 +208,10 @@ func Detection(ctx context.Context, metrics []*types.VolumeHealthMetrics, cluste
 		}
 
 		// Poorly aligned partial volumes wait longer for another write to cross
-		// the next large-block row boundary. Full and read-only volumes use the
-		// normal threshold because they cannot improve their alignment.
-		requiredQuiet, aligned := requiredQuietPeriod(metric.Size, metric.FullnessRatio, metric.IsReadOnly, ecConfig)
+		// the next reachable large-block row boundary. Full, read-only, capped,
+		// and partially encoded volumes use the normal threshold because waiting
+		// cannot improve their layout or recovery state.
+		requiredQuiet, aligned := requiredQuietPeriod(metric.Size, metric.VolumeSizeLimit, metric.FullnessRatio, metric.IsReadOnly, existingECShardCount > 0, ecConfig)
 
 		// Check quiet duration and fullness criteria
 		if metric.Age >= requiredQuiet && metric.FullnessRatio >= ecConfig.FullnessRatio {
@@ -432,7 +434,8 @@ func Detection(ctx context.Context, metrics []*types.VolumeHealthMetrics, cluste
 				continue
 			}
 			sizeMB := float64(metric.Size) / (1024 * 1024)
-			requiredQuiet, aligned := requiredQuietPeriod(metric.Size, metric.FullnessRatio, metric.IsReadOnly, ecConfig)
+			hasExistingECShards := clusterInfo.ActiveTopology != nil && countExistingEcShardsForVolume(clusterInfo.ActiveTopology, metric.VolumeID, metric.Collection) > 0
+			requiredQuiet, aligned := requiredQuietPeriod(metric.Size, metric.VolumeSizeLimit, metric.FullnessRatio, metric.IsReadOnly, hasExistingECShards, ecConfig)
 			glog.V(1).Infof("ERASURE CODING: Volume %d: size=%.1fMB (need ≥%dMB), age=%s (need ≥%s), fullness=%.1f%% (need ≥%.1f%%), large-block aligned=%t",
 				metric.VolumeID, sizeMB, ecConfig.MinSizeMB, metric.Age.Truncate(time.Minute), requiredQuiet.Truncate(time.Minute),
 				metric.FullnessRatio*100, ecConfig.FullnessRatio*100, aligned)

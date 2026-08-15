@@ -46,6 +46,10 @@ func TestBuildVolumeMetricsEmptyFilter(t *testing.T) {
 	if len(metrics) != 2 {
 		t.Fatalf("expected 2 metrics, got %d", len(metrics))
 	}
+	const wantLimit = uint64(30000 * 1024 * 1024)
+	if metrics[0].VolumeSizeLimit != wantLimit {
+		t.Fatalf("volume size limit = %d, want %d", metrics[0].VolumeSizeLimit, wantLimit)
+	}
 }
 
 func TestBuildVolumeMetricsAllCollections(t *testing.T) {

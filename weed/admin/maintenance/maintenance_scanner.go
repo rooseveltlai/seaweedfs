@@ -153,6 +153,7 @@ func (ms *MaintenanceScanner) getVolumeHealthMetrics() ([]*types.VolumeHealthMet
 								IsECVolume:       false, // Will be determined from volume structure
 								ReplicaCount:     1,     // Will be counted
 								ExpectedReplicas: int(volInfo.ReplicaPlacement),
+								VolumeSizeLimit:  volumeSizeLimitBytes,
 							}
 
 							// Calculate derived metrics

@@ -105,6 +105,25 @@ func TestApplyMaintenanceConfigFromTomlNoKeys(t *testing.T) {
 	}
 }
 
+func TestApplyMaintenanceConfigFromTomlClampsZeroUnalignedQuietPeriod(t *testing.T) {
+	dir := t.TempDir()
+	cp := NewConfigPersistence(dir)
+	v := tomlConfig(t, `
+[maintenance.erasure_coding]
+quiet_for_seconds = 7200
+unaligned_quiet_for_seconds = 0
+`)
+
+	if err := cp.ApplyMaintenanceConfigFromToml(v); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	ecConf := erasure_coding.LoadConfigFromPersistence(cp)
+	if ecConf.UnalignedQuietForSeconds != 7200 {
+		t.Errorf("unaligned quiet for = %v, want normal quiet period 7200", ecConf.UnalignedQuietForSeconds)
+	}
+}
+
 func TestApplyMaintenanceConfigFromTomlRequiresDataDir(t *testing.T) {
 	cp := NewConfigPersistence("")
 	v := tomlConfig(t, `
