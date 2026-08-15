@@ -9,15 +9,18 @@ import (
 	"github.com/seaweedfs/seaweedfs/weed/worker/tasks/base"
 )
 
+const defaultUnalignedQuietForSeconds = 72 * 60 * 60
+
 // Config extends BaseConfig with erasure coding specific settings
 type Config struct {
 	base.BaseConfig
-	QuietForSeconds  int      `json:"quiet_for_seconds"`
-	FullnessRatio    float64  `json:"fullness_ratio"`
-	CollectionFilter string   `json:"collection_filter"`
-	MinSizeMB        int      `json:"min_size_mb"`
-	PreferredTags    []string `json:"preferred_tags"`
-	ReplicaPlacement string   `json:"replica_placement"` // e.g. "020"; empty falls back to the master default replication
+	QuietForSeconds          int      `json:"quiet_for_seconds"`
+	UnalignedQuietForSeconds int      `json:"unaligned_quiet_for_seconds"`
+	FullnessRatio            float64  `json:"fullness_ratio"`
+	CollectionFilter         string   `json:"collection_filter"`
+	MinSizeMB                int      `json:"min_size_mb"`
+	PreferredTags            []string `json:"preferred_tags"`
+	ReplicaPlacement         string   `json:"replica_placement"` // e.g. "020"; empty falls back to the master default replication
 }
 
 // NewDefaultConfig creates a new default erasure coding configuration
@@ -28,11 +31,12 @@ func NewDefaultConfig() *Config {
 			ScanIntervalSeconds: 60 * 60, // 1 hour
 			MaxConcurrent:       1,
 		},
-		QuietForSeconds:  3600, // 1 hour, matching the shell ec.encode -quietFor default
-		FullnessRatio:    0.95, // 95%, matching the shell ec.encode -fullPercent default
-		CollectionFilter: "",
-		MinSizeMB:        30, // 30MB (more reasonable than 100MB)
-		PreferredTags:    nil,
+		QuietForSeconds:          3600,                            // 1 hour, matching the shell ec.encode -quietFor default
+		UnalignedQuietForSeconds: defaultUnalignedQuietForSeconds, // 72 hours gives nearly full volumes time to cross an EC row boundary
+		FullnessRatio:            0.95,                            // 95%, matching the shell ec.encode -fullPercent default
+		CollectionFilter:         "",
+		MinSizeMB:                30, // 30MB (more reasonable than 100MB)
+		PreferredTags:            nil,
 	}
 }
 
@@ -97,6 +101,22 @@ func GetConfigSpec() base.ConfigSpec {
 				HelpText:     "Volume must not be modified for this duration before erasure coding",
 				Placeholder:  "60",
 				Unit:         config.UnitMinutes,
+				InputType:    "interval",
+				CSSClasses:   "form-control",
+			},
+			{
+				Name:         "unaligned_quiet_for_seconds",
+				JSONName:     "unaligned_quiet_for_seconds",
+				Type:         config.FieldTypeInterval,
+				DefaultValue: defaultUnalignedQuietForSeconds,
+				MinValue:     60 * 60,
+				MaxValue:     30 * 24 * 60 * 60,
+				Required:     true,
+				DisplayName:  "Unaligned Quiet Period",
+				Description:  "Minimum quiet time for volumes with more than 1% of their data in the EC small-block tail",
+				HelpText:     "Poorly aligned volumes wait longer for more writes, then remain eligible so they are not replicated indefinitely",
+				Placeholder:  "72",
+				Unit:         config.UnitHours,
 				InputType:    "interval",
 				CSSClasses:   "form-control",
 			},
@@ -186,12 +206,13 @@ func (c *Config) ToTaskPolicy() *worker_pb.TaskPolicy {
 		CheckIntervalSeconds:  int32(c.ScanIntervalSeconds),
 		TaskConfig: &worker_pb.TaskPolicy_ErasureCodingConfig{
 			ErasureCodingConfig: &worker_pb.ErasureCodingTaskConfig{
-				FullnessRatio:    float64(c.FullnessRatio),
-				QuietForSeconds:  int32(c.QuietForSeconds),
-				MinVolumeSizeMb:  int32(c.MinSizeMB),
-				CollectionFilter: c.CollectionFilter,
-				PreferredTags:    preferredTagsCopy,
-				ReplicaPlacement: c.ReplicaPlacement,
+				FullnessRatio:            float64(c.FullnessRatio),
+				QuietForSeconds:          int32(c.QuietForSeconds),
+				MinVolumeSizeMb:          int32(c.MinSizeMB),
+				CollectionFilter:         c.CollectionFilter,
+				PreferredTags:            preferredTagsCopy,
+				ReplicaPlacement:         c.ReplicaPlacement,
+				UnalignedQuietForSeconds: int32(c.UnalignedQuietForSeconds),
 			},
 		},
 	}
@@ -212,6 +233,12 @@ func (c *Config) FromTaskPolicy(policy *worker_pb.TaskPolicy) error {
 	if ecConfig := policy.GetErasureCodingConfig(); ecConfig != nil {
 		c.FullnessRatio = float64(ecConfig.FullnessRatio)
 		c.QuietForSeconds = int(ecConfig.QuietForSeconds)
+		if ecConfig.UnalignedQuietForSeconds > 0 {
+			c.UnalignedQuietForSeconds = int(ecConfig.UnalignedQuietForSeconds)
+		} else if c.UnalignedQuietForSeconds <= 0 {
+			// Policies persisted before this field was added decode it as zero.
+			c.UnalignedQuietForSeconds = defaultUnalignedQuietForSeconds
+		}
 		c.MinSizeMB = int(ecConfig.MinVolumeSizeMb)
 		c.CollectionFilter = ecConfig.CollectionFilter
 		c.PreferredTags = append([]string(nil), ecConfig.PreferredTags...)

@@ -110,6 +110,9 @@ func TestDeriveErasureCodingWorkerConfig(t *testing.T) {
 		"quiet_for_seconds": {
 			Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: 720},
 		},
+		"unaligned_quiet_for_seconds": {
+			Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: 172800},
+		},
 		"fullness_ratio": {
 			Kind: &plugin_pb.ConfigValue_DoubleValue{DoubleValue: 0.92},
 		},
@@ -121,6 +124,9 @@ func TestDeriveErasureCodingWorkerConfig(t *testing.T) {
 	cfg := deriveErasureCodingWorkerConfig(values)
 	if cfg.TaskConfig.QuietForSeconds != 720 {
 		t.Fatalf("expected quiet_for_seconds 720, got %d", cfg.TaskConfig.QuietForSeconds)
+	}
+	if cfg.TaskConfig.UnalignedQuietForSeconds != 172800 {
+		t.Fatalf("expected unaligned_quiet_for_seconds 172800, got %d", cfg.TaskConfig.UnalignedQuietForSeconds)
 	}
 	if cfg.TaskConfig.FullnessRatio != 0.92 {
 		t.Fatalf("expected fullness_ratio 0.92, got %v", cfg.TaskConfig.FullnessRatio)

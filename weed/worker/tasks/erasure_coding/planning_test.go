@@ -83,7 +83,7 @@ func TestDetectionEncodesDespiteLowServerStub(t *testing.T) {
 	activeTopology := buildStubReplicaTopology(t, volumeID)
 	clusterInfo := &types.ClusterInfo{ActiveTopology: activeTopology}
 
-	lastModified := time.Now().Add(-2 * time.Hour)
+	lastModified := time.Now().Add(-73 * time.Hour)
 	metrics := []*types.VolumeHealthMetrics{
 		// Stub on the lowest server: an interrupted encode left a 0-byte .dat.
 		{VolumeID: volumeID, Server: "127.0.0.1:8080", Size: 0, FullnessRatio: 0, LastModified: lastModified, Age: time.Since(lastModified)},

@@ -372,10 +372,11 @@ func (cp *ConfigPersistence) LoadErasureCodingTaskConfig() (*ErasureCodingTaskCo
 
 	// Return default config if no valid config found
 	return &ErasureCodingTaskConfig{
-		FullnessRatio:    0.9,
-		QuietForSeconds:  3600,
-		MinVolumeSizeMb:  1024,
-		CollectionFilter: "",
+		FullnessRatio:            0.9,
+		QuietForSeconds:          3600,
+		UnalignedQuietForSeconds: 72 * 60 * 60,
+		MinVolumeSizeMb:          1024,
+		CollectionFilter:         "",
 	}, nil
 }
 
@@ -390,10 +391,11 @@ func (cp *ConfigPersistence) LoadErasureCodingTaskPolicy() (*worker_pb.TaskPolic
 			CheckIntervalSeconds:  24 * 3600,  // 24 hours in seconds
 			TaskConfig: &worker_pb.TaskPolicy_ErasureCodingConfig{
 				ErasureCodingConfig: &worker_pb.ErasureCodingTaskConfig{
-					FullnessRatio:    0.9,
-					QuietForSeconds:  3600,
-					MinVolumeSizeMb:  1024,
-					CollectionFilter: "",
+					FullnessRatio:            0.9,
+					QuietForSeconds:          3600,
+					UnalignedQuietForSeconds: 72 * 60 * 60,
+					MinVolumeSizeMb:          1024,
+					CollectionFilter:         "",
 				},
 			},
 		}, nil
@@ -412,10 +414,11 @@ func (cp *ConfigPersistence) LoadErasureCodingTaskPolicy() (*worker_pb.TaskPolic
 			CheckIntervalSeconds:  24 * 3600,  // 24 hours in seconds
 			TaskConfig: &worker_pb.TaskPolicy_ErasureCodingConfig{
 				ErasureCodingConfig: &worker_pb.ErasureCodingTaskConfig{
-					FullnessRatio:    0.9,
-					QuietForSeconds:  3600,
-					MinVolumeSizeMb:  1024,
-					CollectionFilter: "",
+					FullnessRatio:            0.9,
+					QuietForSeconds:          3600,
+					UnalignedQuietForSeconds: 72 * 60 * 60,
+					MinVolumeSizeMb:          1024,
+					CollectionFilter:         "",
 				},
 			},
 		}, nil
@@ -721,10 +724,11 @@ func buildPolicyFromTaskConfigs() *worker_pb.MaintenancePolicy {
 			CheckIntervalSeconds:  int32(ecConfig.ScanIntervalSeconds),
 			TaskConfig: &worker_pb.TaskPolicy_ErasureCodingConfig{
 				ErasureCodingConfig: &worker_pb.ErasureCodingTaskConfig{
-					FullnessRatio:    float64(ecConfig.FullnessRatio),
-					QuietForSeconds:  int32(ecConfig.QuietForSeconds),
-					MinVolumeSizeMb:  int32(ecConfig.MinSizeMB),
-					CollectionFilter: ecConfig.CollectionFilter,
+					FullnessRatio:            float64(ecConfig.FullnessRatio),
+					QuietForSeconds:          int32(ecConfig.QuietForSeconds),
+					UnalignedQuietForSeconds: int32(ecConfig.UnalignedQuietForSeconds),
+					MinVolumeSizeMb:          int32(ecConfig.MinSizeMB),
+					CollectionFilter:         ecConfig.CollectionFilter,
 				},
 			},
 		}

@@ -139,7 +139,7 @@ func buildStuckSourceTopology(t *testing.T, volumeID uint32, presentShardCount i
 // criteria (Age, FullnessRatio, Size), with `Age` derived from `LastModified`
 // so the two fields stay consistent for any reader.
 func buildStuckSourceMetrics(volumeID uint32, server string) []*types.VolumeHealthMetrics {
-	lastModified := time.Now().Add(-2 * time.Hour)
+	lastModified := time.Now().Add(-73 * time.Hour)
 	return []*types.VolumeHealthMetrics{{
 		VolumeID:      volumeID,
 		Server:        server,
@@ -228,6 +228,39 @@ func TestDetectionMaxResultsHonorsLimit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
 	assert.True(t, hasMore)
+}
+
+func TestDetectionUsesLongerQuietPeriodForUnalignedVolumes(t *testing.T) {
+	const gib = uint64(1024 * 1024 * 1024)
+
+	tests := []struct {
+		name string
+		size uint64
+		age  time.Duration
+		want int
+	}{
+		{name: "aligned volume uses normal quiet period", size: 30 * gib, age: 2 * time.Hour, want: 1},
+		{name: "unaligned volume waits", size: 30*gib - 1, age: 2 * time.Hour, want: 0},
+		{name: "unaligned volume remains eligible after grace", size: 30*gib - 1, age: 73 * time.Hour, want: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			activeTopology := buildActiveTopology(t, erasure_coding.TotalShardsCount, []string{"hdd"}, 20, 0)
+			clusterInfo := &types.ClusterInfo{ActiveTopology: activeTopology}
+			metric := &types.VolumeHealthMetrics{
+				VolumeID:      1,
+				Server:        "10.0.0.1:8080",
+				Size:          tt.size,
+				FullnessRatio: 0.96,
+				Age:           tt.age,
+			}
+
+			results, _, err := Detection(context.Background(), []*types.VolumeHealthMetrics{metric}, clusterInfo, NewDefaultConfig(), 0)
+			require.NoError(t, err)
+			require.Len(t, results, tt.want)
+		})
+	}
 }
 
 // #9369: 7 servers × 2 physical HDDs must yield 14 distinct (server, disk_id)
@@ -404,8 +437,8 @@ func buildVolumeMetricsForIDs(count int) []*types.VolumeHealthMetrics {
 			Size:          200 * 1024 * 1024,
 			Collection:    "",
 			FullnessRatio: 0.96,
-			LastModified:  now.Add(-2 * time.Hour),
-			Age:           2 * time.Hour,
+			LastModified:  now.Add(-73 * time.Hour),
+			Age:           73 * time.Hour,
 		})
 	}
 	return metrics

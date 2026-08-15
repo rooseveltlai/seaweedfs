@@ -112,6 +112,15 @@ func (h *ErasureCodingHandler) Descriptor() *plugin_pb.JobTypeDescriptor {
 							MinValue:    &plugin_pb.ConfigValue{Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: 0}},
 						},
 						{
+							Name:        "unaligned_quiet_for_seconds",
+							Label:       "Unaligned Quiet Period (s)",
+							Description: "Poorly aligned volumes must remain unmodified for this duration before EC.",
+							FieldType:   plugin_pb.ConfigFieldType_CONFIG_FIELD_TYPE_INT64,
+							Widget:      plugin_pb.ConfigWidget_CONFIG_WIDGET_NUMBER,
+							Required:    true,
+							MinValue:    &plugin_pb.ConfigValue{Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: 3600}},
+						},
+						{
 							Name:        "fullness_ratio",
 							Label:       "Fullness Ratio",
 							Description: "Minimum volume fullness ratio to trigger erasure coding.",
@@ -153,6 +162,9 @@ func (h *ErasureCodingHandler) Descriptor() *plugin_pb.JobTypeDescriptor {
 				"quiet_for_seconds": {
 					Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: 3600},
 				},
+				"unaligned_quiet_for_seconds": {
+					Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: defaultUnalignedQuietForSeconds},
+				},
 				"fullness_ratio": {
 					Kind: &plugin_pb.ConfigValue_DoubleValue{DoubleValue: 0.95},
 				},
@@ -182,6 +194,9 @@ func (h *ErasureCodingHandler) Descriptor() *plugin_pb.JobTypeDescriptor {
 		WorkerDefaultValues: map[string]*plugin_pb.ConfigValue{
 			"quiet_for_seconds": {
 				Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: 3600},
+			},
+			"unaligned_quiet_for_seconds": {
+				Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: defaultUnalignedQuietForSeconds},
 			},
 			"fullness_ratio": {
 				Kind: &plugin_pb.ConfigValue_DoubleValue{DoubleValue: 0.95},
@@ -294,7 +309,6 @@ func emitErasureCodingDetectionDecisionTrace(
 		return nil
 	}
 
-	quietThreshold := time.Duration(taskConfig.QuietForSeconds) * time.Second
 	minSizeBytes := uint64(taskConfig.MinSizeMB) * 1024 * 1024
 	allowedCollections := wildcard.CompileWildcardMatchers(taskConfig.CollectionFilter)
 
@@ -338,7 +352,8 @@ func emitErasureCodingDetectionDecisionTrace(
 			skippedCollectionFilter++
 			continue
 		}
-		if metric.Age < quietThreshold {
+		requiredQuiet, _ := requiredQuietPeriod(metric.Size, taskConfig)
+		if metric.Age < requiredQuiet {
 			skippedQuietTime++
 			continue
 		}
@@ -410,6 +425,9 @@ func emitErasureCodingDetectionDecisionTrace(
 		"quiet_for_seconds": {
 			Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: int64(taskConfig.QuietForSeconds)},
 		},
+		"unaligned_quiet_for_seconds": {
+			Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: int64(taskConfig.UnalignedQuietForSeconds)},
+		},
 		"min_size_mb": {
 			Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: int64(taskConfig.MinSizeMB)},
 		},
@@ -426,15 +444,17 @@ func emitErasureCodingDetectionDecisionTrace(
 			continue
 		}
 		sizeMB := float64(metric.Size) / (1024 * 1024)
+		requiredQuiet, aligned := requiredQuietPeriod(metric.Size, taskConfig)
 		message := fmt.Sprintf(
-			"ERASURE CODING: Volume %d: size=%.1fMB (need ≥%dMB), age=%s (need ≥%s), fullness=%.1f%% (need ≥%.1f%%)",
+			"ERASURE CODING: Volume %d: size=%.1fMB (need ≥%dMB), age=%s (need ≥%s), fullness=%.1f%% (need ≥%.1f%%), large-block aligned=%t",
 			metric.VolumeID,
 			sizeMB,
 			taskConfig.MinSizeMB,
 			metric.Age.Truncate(time.Minute),
-			quietThreshold.Truncate(time.Minute),
+			requiredQuiet.Truncate(time.Minute),
 			metric.FullnessRatio*100,
 			taskConfig.FullnessRatio*100,
+			aligned,
 		)
 		if err := sender.SendActivity(pluginworker.BuildDetectorActivity("decision_volume", message, map[string]*plugin_pb.ConfigValue{
 			"volume_id": {
@@ -450,7 +470,10 @@ func emitErasureCodingDetectionDecisionTrace(
 				Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: int64(metric.Age.Seconds())},
 			},
 			"required_quiet_for_seconds": {
-				Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: int64(taskConfig.QuietForSeconds)},
+				Kind: &plugin_pb.ConfigValue_Int64Value{Int64Value: int64(requiredQuiet.Seconds())},
+			},
+			"large_block_aligned": {
+				Kind: &plugin_pb.ConfigValue_BoolValue{BoolValue: aligned},
 			},
 			"fullness_percent": {
 				Kind: &plugin_pb.ConfigValue_DoubleValue{DoubleValue: metric.FullnessRatio * 100},
@@ -601,6 +624,12 @@ func deriveErasureCodingWorkerConfig(values map[string]*plugin_pb.ConfigValue) *
 		quietForSeconds = 0
 	}
 	taskConfig.QuietForSeconds = quietForSeconds
+
+	unalignedQuietForSeconds := pluginworker.ReadIntConfig(values, "unaligned_quiet_for_seconds", taskConfig.UnalignedQuietForSeconds)
+	if unalignedQuietForSeconds < quietForSeconds {
+		unalignedQuietForSeconds = quietForSeconds
+	}
+	taskConfig.UnalignedQuietForSeconds = unalignedQuietForSeconds
 
 	fullnessRatio := pluginworker.ReadDoubleConfig(values, "fullness_ratio", taskConfig.FullnessRatio)
 	if fullnessRatio < 0 {

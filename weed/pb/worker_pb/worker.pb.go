@@ -2970,15 +2970,16 @@ func (x *VacuumTaskConfig) GetMinIntervalSeconds() int32 {
 
 // ErasureCodingTaskConfig contains EC-specific configuration
 type ErasureCodingTaskConfig struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	FullnessRatio    float64                `protobuf:"fixed64,1,opt,name=fullness_ratio,json=fullnessRatio,proto3" json:"fullness_ratio,omitempty"`          // Minimum fullness ratio to trigger EC (0.0-1.0)
-	QuietForSeconds  int32                  `protobuf:"varint,2,opt,name=quiet_for_seconds,json=quietForSeconds,proto3" json:"quiet_for_seconds,omitempty"`   // Minimum quiet time before EC
-	MinVolumeSizeMb  int32                  `protobuf:"varint,3,opt,name=min_volume_size_mb,json=minVolumeSizeMb,proto3" json:"min_volume_size_mb,omitempty"` // Minimum volume size for EC
-	CollectionFilter string                 `protobuf:"bytes,4,opt,name=collection_filter,json=collectionFilter,proto3" json:"collection_filter,omitempty"`   // Only process volumes from specific collections
-	PreferredTags    []string               `protobuf:"bytes,5,rep,name=preferred_tags,json=preferredTags,proto3" json:"preferred_tags,omitempty"`            // Disk tags to prioritize for EC shard placement
-	ReplicaPlacement string                 `protobuf:"bytes,6,opt,name=replica_placement,json=replicaPlacement,proto3" json:"replica_placement,omitempty"`   // EC shard replica placement (e.g. "020"); empty falls back to master default replication
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	FullnessRatio            float64                `protobuf:"fixed64,1,opt,name=fullness_ratio,json=fullnessRatio,proto3" json:"fullness_ratio,omitempty"`                                     // Minimum fullness ratio to trigger EC (0.0-1.0)
+	QuietForSeconds          int32                  `protobuf:"varint,2,opt,name=quiet_for_seconds,json=quietForSeconds,proto3" json:"quiet_for_seconds,omitempty"`                              // Minimum quiet time before EC
+	MinVolumeSizeMb          int32                  `protobuf:"varint,3,opt,name=min_volume_size_mb,json=minVolumeSizeMb,proto3" json:"min_volume_size_mb,omitempty"`                            // Minimum volume size for EC
+	CollectionFilter         string                 `protobuf:"bytes,4,opt,name=collection_filter,json=collectionFilter,proto3" json:"collection_filter,omitempty"`                              // Only process volumes from specific collections
+	PreferredTags            []string               `protobuf:"bytes,5,rep,name=preferred_tags,json=preferredTags,proto3" json:"preferred_tags,omitempty"`                                       // Disk tags to prioritize for EC shard placement
+	ReplicaPlacement         string                 `protobuf:"bytes,6,opt,name=replica_placement,json=replicaPlacement,proto3" json:"replica_placement,omitempty"`                              // EC shard replica placement (e.g. "020"); empty falls back to master default replication
+	UnalignedQuietForSeconds int32                  `protobuf:"varint,7,opt,name=unaligned_quiet_for_seconds,json=unalignedQuietForSeconds,proto3" json:"unaligned_quiet_for_seconds,omitempty"` // Quiet time for volumes with a large small-block EC tail
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *ErasureCodingTaskConfig) Reset() {
@@ -3051,6 +3052,13 @@ func (x *ErasureCodingTaskConfig) GetReplicaPlacement() string {
 		return x.ReplicaPlacement
 	}
 	return ""
+}
+
+func (x *ErasureCodingTaskConfig) GetUnalignedQuietForSeconds() int32 {
+	if x != nil {
+		return x.UnalignedQuietForSeconds
+	}
+	return 0
 }
 
 // BalanceTaskConfig contains balance-specific configuration
@@ -4280,14 +4288,15 @@ const file_worker_proto_rawDesc = "" +
 	"\x10VacuumTaskConfig\x12+\n" +
 	"\x11garbage_threshold\x18\x01 \x01(\x01R\x10garbageThreshold\x12/\n" +
 	"\x14min_volume_age_hours\x18\x02 \x01(\x05R\x11minVolumeAgeHours\x120\n" +
-	"\x14min_interval_seconds\x18\x03 \x01(\x05R\x12minIntervalSeconds\"\x9a\x02\n" +
+	"\x14min_interval_seconds\x18\x03 \x01(\x05R\x12minIntervalSeconds\"\xd9\x02\n" +
 	"\x17ErasureCodingTaskConfig\x12%\n" +
 	"\x0efullness_ratio\x18\x01 \x01(\x01R\rfullnessRatio\x12*\n" +
 	"\x11quiet_for_seconds\x18\x02 \x01(\x05R\x0fquietForSeconds\x12+\n" +
 	"\x12min_volume_size_mb\x18\x03 \x01(\x05R\x0fminVolumeSizeMb\x12+\n" +
 	"\x11collection_filter\x18\x04 \x01(\tR\x10collectionFilter\x12%\n" +
 	"\x0epreferred_tags\x18\x05 \x03(\tR\rpreferredTags\x12+\n" +
-	"\x11replica_placement\x18\x06 \x01(\tR\x10replicaPlacement\"\x9b\x01\n" +
+	"\x11replica_placement\x18\x06 \x01(\tR\x10replicaPlacement\x12=\n" +
+	"\x1bunaligned_quiet_for_seconds\x18\a \x01(\x05R\x18unalignedQuietForSeconds\"\x9b\x01\n" +
 	"\x11BalanceTaskConfig\x12/\n" +
 	"\x13imbalance_threshold\x18\x01 \x01(\x01R\x12imbalanceThreshold\x12(\n" +
 	"\x10min_server_count\x18\x02 \x01(\x05R\x0eminServerCount\x12+\n" +

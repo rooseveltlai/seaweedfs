@@ -48,10 +48,11 @@ func buildPolicyFromTaskConfigs() *worker_pb.MaintenancePolicy {
 			CheckIntervalSeconds:  int32(ecConfig.ScanIntervalSeconds),
 			TaskConfig: &worker_pb.TaskPolicy_ErasureCodingConfig{
 				ErasureCodingConfig: &worker_pb.ErasureCodingTaskConfig{
-					FullnessRatio:    float64(ecConfig.FullnessRatio),
-					QuietForSeconds:  int32(ecConfig.QuietForSeconds),
-					MinVolumeSizeMb:  int32(ecConfig.MinSizeMB),
-					CollectionFilter: ecConfig.CollectionFilter,
+					FullnessRatio:            float64(ecConfig.FullnessRatio),
+					QuietForSeconds:          int32(ecConfig.QuietForSeconds),
+					UnalignedQuietForSeconds: int32(ecConfig.UnalignedQuietForSeconds),
+					MinVolumeSizeMb:          int32(ecConfig.MinSizeMB),
+					CollectionFilter:         ecConfig.CollectionFilter,
 				},
 			},
 		}

@@ -62,6 +62,10 @@ func (cp *ConfigPersistence) ApplyMaintenanceConfigFromToml(v TomlConfig) error 
 		ecConf.QuietForSeconds = v.GetInt(k)
 		ecChanged = true
 	}
+	if k := "maintenance.erasure_coding.unaligned_quiet_for_seconds"; v.IsSet(k) {
+		ecConf.UnalignedQuietForSeconds = v.GetInt(k)
+		ecChanged = true
+	}
 	if k := "maintenance.erasure_coding.min_size_mb"; v.IsSet(k) {
 		ecConf.MinSizeMB = v.GetInt(k)
 		ecChanged = true
@@ -198,11 +202,12 @@ var pluginConfigSections = []pluginConfigSection{
 		jobType: "erasure_coding",
 		prefix:  "maintenance.erasure_coding",
 		workerKeys: map[string]func(v TomlConfig, key string) *plugin_pb.ConfigValue{
-			"fullness_ratio":    doubleValue,
-			"quiet_for_seconds": int64Value,
-			"min_size_mb":       int64Value,
-			"preferred_tags":    stringListValue,
-			"replica_placement": stringValue,
+			"fullness_ratio":              doubleValue,
+			"quiet_for_seconds":           int64Value,
+			"unaligned_quiet_for_seconds": int64Value,
+			"min_size_mb":                 int64Value,
+			"preferred_tags":              stringListValue,
+			"replica_placement":           stringValue,
 		},
 		// workers read collection_filter from the admin values, not the worker values
 		adminKeys: map[string]func(v TomlConfig, key string) *plugin_pb.ConfigValue{

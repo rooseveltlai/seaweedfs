@@ -49,6 +49,7 @@ min_volume_age_seconds = 1800
 [maintenance.erasure_coding]
 enabled = false
 fullness_ratio = 0.8
+unaligned_quiet_for_seconds = 172800
 preferred_tags = "Fast, ssd"
 `)
 	if err := cp.ApplyMaintenanceConfigFromToml(v); err != nil {
@@ -79,6 +80,9 @@ preferred_tags = "Fast, ssd"
 	}
 	if ecConf.QuietForSeconds != 3600 {
 		t.Errorf("quiet for = %v, want default 3600 preserved", ecConf.QuietForSeconds)
+	}
+	if ecConf.UnalignedQuietForSeconds != 172800 {
+		t.Errorf("unaligned quiet for = %v, want 172800", ecConf.UnalignedQuietForSeconds)
 	}
 
 	// balance section absent: nothing written

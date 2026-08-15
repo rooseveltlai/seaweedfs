@@ -44,7 +44,6 @@ func Detection(ctx context.Context, metrics []*types.VolumeHealthMetrics, cluste
 	hasMore := false
 	stoppedEarly := false
 	now := time.Now()
-	quietThreshold := time.Duration(ecConfig.QuietForSeconds) * time.Second
 	minSizeBytes := uint64(ecConfig.MinSizeMB) * 1024 * 1024 // Configurable minimum
 
 	debugCount := 0
@@ -207,8 +206,13 @@ func Detection(ctx context.Context, metrics []*types.VolumeHealthMetrics, cluste
 			continue
 		}
 
+		// Poorly aligned volumes wait longer for another write to cross the next
+		// large-block row boundary. The longer threshold is still finite so cold
+		// volumes do not remain replicated indefinitely.
+		requiredQuiet, aligned := requiredQuietPeriod(metric.Size, ecConfig)
+
 		// Check quiet duration and fullness criteria
-		if metric.Age >= quietThreshold && metric.FullnessRatio >= ecConfig.FullnessRatio {
+		if metric.Age >= requiredQuiet && metric.FullnessRatio >= ecConfig.FullnessRatio {
 			if ctx != nil {
 				if err := ctx.Err(); err != nil {
 					return results, hasMore, err
@@ -226,9 +230,9 @@ func Detection(ctx context.Context, metrics []*types.VolumeHealthMetrics, cluste
 				Server:     metric.Server,
 				Collection: metric.Collection,
 				Priority:   types.TaskPriorityLow, // EC is not urgent
-				Reason: fmt.Sprintf("Volume meets EC criteria: quiet for %.1fs (>%ds), fullness=%.1f%% (>%.1f%%), size=%.1fMB (>%dMB)",
-					metric.Age.Seconds(), ecConfig.QuietForSeconds, metric.FullnessRatio*100, ecConfig.FullnessRatio*100,
-					float64(metric.Size)/(1024*1024), ecConfig.MinSizeMB),
+				Reason: fmt.Sprintf("Volume meets EC criteria: quiet for %.1fs (>%ds), fullness=%.1f%% (>%.1f%%), size=%.1fMB (>%dMB), large-block aligned=%t",
+					metric.Age.Seconds(), int(requiredQuiet.Seconds()), metric.FullnessRatio*100, ecConfig.FullnessRatio*100,
+					float64(metric.Size)/(1024*1024), ecConfig.MinSizeMB, aligned),
 				ScheduleAt: now,
 			}
 
@@ -402,7 +406,7 @@ func Detection(ctx context.Context, metrics []*types.VolumeHealthMetrics, cluste
 			results = append(results, result)
 		} else {
 			// Count debug reasons
-			if metric.Age < quietThreshold {
+			if metric.Age < requiredQuiet {
 				skippedQuietTime++
 			}
 			if metric.FullnessRatio < ecConfig.FullnessRatio {
@@ -428,9 +432,10 @@ func Detection(ctx context.Context, metrics []*types.VolumeHealthMetrics, cluste
 				continue
 			}
 			sizeMB := float64(metric.Size) / (1024 * 1024)
-			glog.V(1).Infof("ERASURE CODING: Volume %d: size=%.1fMB (need ≥%dMB), age=%s (need ≥%s), fullness=%.1f%% (need ≥%.1f%%)",
-				metric.VolumeID, sizeMB, ecConfig.MinSizeMB, metric.Age.Truncate(time.Minute), quietThreshold.Truncate(time.Minute),
-				metric.FullnessRatio*100, ecConfig.FullnessRatio*100)
+			requiredQuiet, aligned := requiredQuietPeriod(metric.Size, ecConfig)
+			glog.V(1).Infof("ERASURE CODING: Volume %d: size=%.1fMB (need ≥%dMB), age=%s (need ≥%s), fullness=%.1f%% (need ≥%.1f%%), large-block aligned=%t",
+				metric.VolumeID, sizeMB, ecConfig.MinSizeMB, metric.Age.Truncate(time.Minute), requiredQuiet.Truncate(time.Minute),
+				metric.FullnessRatio*100, ecConfig.FullnessRatio*100, aligned)
 		}
 	}
 
